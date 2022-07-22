@@ -294,19 +294,6 @@ def get_parameters_stats(parameters_dict,sensors,concs):
             parameters_consolidated.loc['Assoc_'+parameter,sensor]=np.average(assoc)
             parameters_consolidated.loc['Assoc_'+parameter+'_std',sensor]=np.std(assoc)
             
-            disassoc = d.loc[(d.index.str.contains('Disassoc'))]
-            disassoc = disassoc.loc[disassoc != 0]
-            parameters_consolidated.loc['Disassoc_'+parameter,sensor]=np.average(disassoc)
-            parameters_consolidated.loc['Disassoc_'+parameter+'_std',sensor]=np.std(disassoc)
-            if parameter == 'K':
-                if np.average(assoc) == 0:
-                    parameters_consolidated.loc['Kd',sensor]=0
-                    parameters_consolidated.loc['Kd_std',sensor]=0
-                else:
-                    parameters_consolidated.loc['Kd_K',sensor]=np.average(disassoc)/np.average(assoc)
-                    parameters_consolidated.loc['Kd_K_std',sensor]=np.average(disassoc)/np.average(assoc)*np.sqrt(
-                        (np.std(disassoc)/np.average(disassoc))**2+(np.std(assoc)/np.average(assoc))**2)
-    
     return parameters_consolidated
 
 def plot_fit_parameters(parameters_dict,steps,sensors,time_bounds,functions,concs,parameters_to_plot=['K'],**kwargs):
