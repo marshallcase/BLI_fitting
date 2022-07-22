@@ -93,7 +93,3 @@ parameters_dict_upd['D1_normalized'].loc[['Assoc1','Assoc2'],'K']=np.nan
 #concentrations of association phases - [M]
 concs = [10e-9,20e-9,30e-9,40e-9,50e-9]
 plot_fit_parameters(parameters_dict_upd,steps,sensors,time_bounds,functions,concs)
-
-#concentrations of association phases - [M]
-concs = [10e-9,20e-9,30e-9,40e-9,50e-9]
-plot_fit_parameters(parameters_dict,steps,sensors,time_bounds,functions,concs)
