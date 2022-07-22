@@ -290,6 +290,22 @@ def get_parameters_stats(parameters_dict,sensors,concs):
                     parameters_consolidated.loc['Kd_K',sensor]=np.nanmean(disassoc)/np.nanmean(assoc)
                     parameters_consolidated.loc['Kd_K_std',sensor]=np.nanmean(disassoc)/np.nanmean(assoc)*np.sqrt(
                         (np.nanstd(disassoc)/np.nanmean(disassoc))**2+(np.nanstd(assoc)/np.nanmean(assoc))**2)
+            
+            parameters_consolidated.loc['Assoc_'+parameter,sensor]=np.average(assoc)
+            parameters_consolidated.loc['Assoc_'+parameter+'_std',sensor]=np.std(assoc)
+            
+            disassoc = d.loc[(d.index.str.contains('Disassoc'))]
+            disassoc = disassoc.loc[disassoc != 0]
+            parameters_consolidated.loc['Disassoc_'+parameter,sensor]=np.average(disassoc)
+            parameters_consolidated.loc['Disassoc_'+parameter+'_std',sensor]=np.std(disassoc)
+            if parameter == 'K':
+                if np.average(assoc) == 0:
+                    parameters_consolidated.loc['Kd',sensor]=0
+                    parameters_consolidated.loc['Kd_std',sensor]=0
+                else:
+                    parameters_consolidated.loc['Kd_K',sensor]=np.average(disassoc)/np.average(assoc)
+                    parameters_consolidated.loc['Kd_K_std',sensor]=np.average(disassoc)/np.average(assoc)*np.sqrt(
+                        (np.std(disassoc)/np.average(disassoc))**2+(np.std(assoc)/np.average(assoc))**2)
     
     return parameters_consolidated
 
@@ -323,6 +339,7 @@ def plot_fit_parameters(parameters_dict,steps,sensors,time_bounds,functions,conc
                 elif step == 'Kd':
                     units = 'M'
                 ax.set_ylabel(parameter+'_'+step + '  [ ' + units + ' ]')
+                ax.set_ylabel(parameter+'_'+step)
                 plot_data = parameters_consolidated.loc[[step+'_'+parameter,step+'_'+parameter+'_std'],sensors]
             
                 ax = plot_fit_parameter(plot_data,sensors,ax,**kwargs)
