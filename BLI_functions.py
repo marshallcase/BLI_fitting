@@ -246,8 +246,8 @@ def get_curve_fit(data_dict,step,sensor,func,time_bound=None,**kwargs):
         perr = np.sqrt(np.diag(pcov))
     except RuntimeError:
         print("Optimal parameters not found: Number of calls to function has reached maxfev = 800.")
-        popt = np.array([0,0,0])
-        perr = np.array([0,0,0])
+        popt = np.array([np.nan,np.nan,np.nan])
+        perr = np.array([np.nan,np.nan,np.nan])
     return popt, perr
 
 # =============================================================================
@@ -272,6 +272,24 @@ def get_parameters_stats(parameters_dict,sensors,concs):
             assoc = d.loc[(d.index.str.contains('Assoc'))]
             assoc = assoc / concs
             assoc = assoc.loc[assoc != 0]
+            assoc = assoc.astype('float')
+            
+            parameters_consolidated.loc['Assoc_'+parameter,sensor]=np.nanmean(assoc)
+            parameters_consolidated.loc['Assoc_'+parameter+'_std',sensor]=np.nanstd(assoc)
+            
+            disassoc = d.loc[(d.index.str.contains('Disassoc'))]
+            disassoc = disassoc.loc[disassoc != 0]
+            disassoc = disassoc.astype('float')
+            parameters_consolidated.loc['Disassoc_'+parameter,sensor]=np.nanmean(disassoc)
+            parameters_consolidated.loc['Disassoc_'+parameter+'_std',sensor]=np.nanstd(disassoc)
+            if parameter == 'K':
+                if np.nanmean(assoc) == 0:
+                    parameters_consolidated.loc['Kd',sensor]=0
+                    parameters_consolidated.loc['Kd_std',sensor]=0
+                else:
+                    parameters_consolidated.loc['Kd_K',sensor]=np.nanmean(disassoc)/np.nanmean(assoc)
+                    parameters_consolidated.loc['Kd_K_std',sensor]=np.nanmean(disassoc)/np.nanmean(assoc)*np.sqrt(
+                        (np.nanstd(disassoc)/np.nanmean(disassoc))**2+(np.nanstd(assoc)/np.nanmean(assoc))**2)
             
             parameters_consolidated.loc['Assoc_'+parameter,sensor]=np.average(assoc)
             parameters_consolidated.loc['Assoc_'+parameter+'_std',sensor]=np.std(assoc)
@@ -314,6 +332,13 @@ def plot_fit_parameters(parameters_dict,steps,sensors,time_bounds,functions,conc
         if parameter == 'K':
             for k,step in enumerate(['Assoc','Disassoc','Kd']):
                 ax = plt.subplot(len(['Assoc','Disassoc','Kd']),len(parameters_to_plot),3*p+k+1)
+                if step == 'Assoc':
+                    units = '1/M/sec'
+                elif step == 'Disassoc':
+                    units = '1/sec'
+                elif step == 'Kd':
+                    units = 'M'
+                ax.set_ylabel(parameter+'_'+step + '  [ ' + units + ' ]')
                 ax.set_ylabel(parameter+'_'+step)
                 plot_data = parameters_consolidated.loc[[step+'_'+parameter,step+'_'+parameter+'_std'],sensors]
             

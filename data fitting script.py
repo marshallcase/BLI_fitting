@@ -86,6 +86,13 @@ plot_fit_all(data_dict,fits,time_bounds,sensors,functions,parameters_dict_upd,pl
 # =============================================================================
 # #plot final parameters from fit
 # =============================================================================
+#manually remove bad fits before plotting
+parameters_dict_upd['A1_normalized'].loc[:,:]=np.nan
+parameters_dict_upd['B1_normalized'].loc['Assoc1','K']=np.nan
+parameters_dict_upd['D1_normalized'].loc[['Assoc1','Assoc2'],'K']=np.nan
+#concentrations of association phases - [M]
+concs = [10e-9,20e-9,30e-9,40e-9,50e-9]
+plot_fit_parameters(parameters_dict_upd,steps,sensors,time_bounds,functions,concs)
 
 #concentrations of association phases - [M]
 concs = [10e-9,20e-9,30e-9,40e-9,50e-9]
