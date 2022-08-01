@@ -15,14 +15,16 @@ from BLI_functions import *
 # =============================================================================
 # input parameters
 # =============================================================================
-data = pd.read_excel('RawData.xlsx')
+folder = 'C:\\Users\\marsh\\Dropbox (University of Michigan)\\Michigan\\assorted antigens\\bcl2\\BLI data\\sort1,2-pe 29jul22\\sort1,2-pe 29jul22\\'
+filename = 'RawData.xlsx'
+data = pd.read_excel(folder+filename)
 # experiment_outline = pd.read_table('220718_ExpMethod.fmf')
 
 #manual parameters
 t_b = 60 #baseline
 t_l = 900 #load
 t_w= 900 #wash
-t_a = 600 #association
+t_a = 1200 #association
 t_d = 3600 #diassociation
 
 #automatic parameters
@@ -36,8 +38,9 @@ steps = ['Assoc1', 'Disassoc1', 'Assoc2', 'Disassoc2',
         'Disassoc4', 'Assoc5', 'Disassoc5']
 
 #sensors: which sensors to fit (i.e. ignore the blanks). has the shape (n_steps,n_sensors)
-sensors = ['A1_normalized', 'B1_normalized', 'C1_normalized', 'D1_normalized',
-       'E1_normalized', 'F1_normalized']
+# sensors = ['A1_normalized', 'B1_normalized', 'C1_normalized', 'D1_normalized',
+#        'E1_normalized']
+sensors=['F1_normalized','G1_normalized','H1_normalized']
 
 #time_bounds: matrix of upper time limits (for baseline drift)
 time_bounds = np.zeros((len(steps),len(sensors)))
@@ -63,33 +66,35 @@ plot_fit_all(data_dict,steps,time_bounds,sensors,functions,parameters_dict,plot_
 # improve fit quality
 # =============================================================================
 #time_bounds: matrix of upper time limits (for baseline drift)
-time_bounds = np.zeros((len(fits),len(sensors)))
-time_bounds[1,1] = 1500
-time_bounds[1,2] = 1000
-time_bounds[3,1] = 1000
-time_bounds[3,2] = 1000
-time_bounds[3,3] = 2000
-time_bounds[5,2] = 1000
-time_bounds[7,2] = 500
-time_bounds[7,4] = 1500
-time_bounds[9,2] = 500
-time_bounds[9,4] = 500
+time_bounds = np.zeros((len(steps),len(sensors)))
+# time_bounds[1,1] = 1500
+# time_bounds[1,2] = 1000
+# time_bounds[3,1] = 1000
+# time_bounds[3,2] = 1000
+# time_bounds[3,3] = 2000
+# time_bounds[5,2] = 1000
+# time_bounds[7,2] = 500
+# time_bounds[7,4] = 1500
+# time_bounds[9,2] = 500
+# time_bounds[9,4] = 500
 
-time_bounds[[1,3,5,7,9],1]=1000
+time_bounds[[1,3,5,7,9],0]=1000
+time_bounds[[1,3,5,7,9],1]=500
 time_bounds[[1,3,5,7,9],2]=1000
-time_bounds[[1,3,5,7,9],3]=2000
-time_bounds[[1,3,5,7,9],4]=1000
 
-parameters_dict_upd = fitAll(data_dict,fits,time_bounds,sensors,functions)
-plot_fit_all(data_dict,fits,time_bounds,sensors,functions,parameters_dict_upd,plot_size)
+
+parameters_dict_upd = fitAll(data_dict,steps,time_bounds,sensors,functions)
+plot_fit_all(data_dict,steps,time_bounds,sensors,functions,parameters_dict_upd,plot_size)
 
 # =============================================================================
 # #plot final parameters from fit
 # =============================================================================
-#manually remove bad fits before plotting
-parameters_dict_upd['A1_normalized'].loc[:,:]=np.nan
-parameters_dict_upd['B1_normalized'].loc['Assoc1','K']=np.nan
-parameters_dict_upd['D1_normalized'].loc[['Assoc1','Assoc2'],'K']=np.nan
-#concentrations of association phases - [M]
+# #manually remove bad fits before plotting
+parameters_dict_upd['F1_normalized'].loc['Assoc1','K']=np.nan
+parameters_dict_upd['F1_normalized'].loc['Disassoc1','K']=np.nan
+parameters_dict_upd['G1_normalized'].loc['Assoc1','K']=np.nan
+parameters_dict_upd['H1_normalized'].loc[['Assoc1','Assoc2'],'K']=np.nan
+parameters_dict_upd['H1_normalized'].loc['Disassoc4','K']=np.nan
+# #concentrations of association phases - [M]
 concs = [10e-9,20e-9,30e-9,40e-9,50e-9]
 plot_fit_parameters(parameters_dict_upd,steps,sensors,time_bounds,functions,concs)
