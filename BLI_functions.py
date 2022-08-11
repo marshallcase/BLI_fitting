@@ -71,7 +71,7 @@ def preprocess(data,t_b,t_l,t_w,t_a,t_d):
 # =============================================================================
 # curvefit all sensors + steps
 # =============================================================================
-def fitAll(data_dict,steps,time_bounds,sensors,functions):
+def fitAll(data_dict,steps,time_bounds,sensors,functions,y0_bounds):
     '''
     fitAll: fit every step in an BLI experiment
     Input:
@@ -81,6 +81,7 @@ def fitAll(data_dict,steps,time_bounds,sensors,functions):
                                             in case of baseline drift
         sensors: an array of sensors to fit
         functions: which functions correspond to which steps
+        y0_bounds: an array of dimension (# sensors, # fits) for fit start location
     Output:
         parameters_dict: fit parameters (Y0, Plateau, K) and their standard deviations
     '''
@@ -91,9 +92,12 @@ def fitAll(data_dict,steps,time_bounds,sensors,functions):
         for j,sensor in enumerate(sensors):
             func = functions[i]
             time_bound = time_bounds[i,j]
+            y0_bound = y0_bounds[i,j]
             if time_bound == 0:
                 time_bound=None
-            popt,perr = get_curve_fit(data_dict,step,sensor,func,time_bound)
+            if y0_bound == 0:
+                y0_bound=None
+            popt,perr = get_curve_fit(data_dict,step,sensor,func,time_bound,y0_bound)
             parameters_dict[sensor].loc[step,:] = np.hstack((popt,perr))
             
     return parameters_dict
@@ -224,7 +228,7 @@ def disassociation(t,Y0,Plateau,K):
 # =============================================================================
 # function to fit equations
 # =============================================================================
-def get_curve_fit(data_dict,step,sensor,func,time_bound=None,**kwargs):
+def get_curve_fit(data_dict,step,sensor,func,time_bound=None,y0_bound=None,**kwargs):
     '''
     get_curve_fit: get fit for a given BLI step
     Input:
@@ -233,6 +237,7 @@ def get_curve_fit(data_dict,step,sensor,func,time_bound=None,**kwargs):
         sensor: which sensor to fit
         func: which function to use for fit
         time_bound: set an upper limit in case of baseline drift, defaults to None
+        y0_bound: set the y value at time 0, defaults to None
     Output:
         popt: fit parameters, outputs 0 if max function evaluations hits cap (default maxfev=800)
         perr: standard deviation fit parameters, outputs 0 if max function evaluations hits cap (default maxfev=800)
@@ -242,7 +247,12 @@ def get_curve_fit(data_dict,step,sensor,func,time_bound=None,**kwargs):
     else:
         fit_data = data_dict[step]
     try:
-        popt, pcov = curve_fit(func, fit_data['Time0'], fit_data[sensor], **kwargs)
+        if y0_bound is None:
+            popt, pcov = curve_fit(func, fit_data['Time0'], fit_data[sensor], **kwargs)
+        else:
+            popt, pcov = curve_fit(lambda t,Plateau,K: func(t,y0_bound,Plateau,K), fit_data['Time0'], fit_data[sensor], **kwargs)
+            popt = np.insert(popt,0,y0_bound)
+            pcov = np.array(((np.nan,np.nan,np.nan),(np.nan,pcov[0,0],pcov[0,1]),(np.nan,pcov[1,0],pcov[1,1])))
         perr = np.sqrt(np.diag(pcov))
     except RuntimeError:
         print("Optimal parameters not found: Number of calls to function has reached maxfev = 800.")
@@ -290,10 +300,7 @@ def get_parameters_stats(parameters_dict,sensors,concs):
                     parameters_consolidated.loc['Kd_K',sensor]=np.nanmean(disassoc)/np.nanmean(assoc)
                     parameters_consolidated.loc['Kd_K_std',sensor]=np.nanmean(disassoc)/np.nanmean(assoc)*np.sqrt(
                         (np.nanstd(disassoc)/np.nanmean(disassoc))**2+(np.nanstd(assoc)/np.nanmean(assoc))**2)
-            
-            parameters_consolidated.loc['Assoc_'+parameter,sensor]=np.average(assoc)
-            parameters_consolidated.loc['Assoc_'+parameter+'_std',sensor]=np.std(assoc)
-            
+    
     return parameters_consolidated
 
 def plot_fit_parameters(parameters_dict,steps,sensors,time_bounds,functions,concs,parameters_to_plot=['K'],**kwargs):
@@ -326,7 +333,6 @@ def plot_fit_parameters(parameters_dict,steps,sensors,time_bounds,functions,conc
                 elif step == 'Kd':
                     units = 'M'
                 ax.set_ylabel(parameter+'_'+step + '  [ ' + units + ' ]')
-                ax.set_ylabel(parameter+'_'+step)
                 plot_data = parameters_consolidated.loc[[step+'_'+parameter,step+'_'+parameter+'_std'],sensors]
             
                 ax = plot_fit_parameter(plot_data,sensors,ax,**kwargs)
