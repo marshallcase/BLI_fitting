@@ -71,7 +71,7 @@ def preprocess(data,t_b,t_l,t_w,t_a,t_d):
 # =============================================================================
 # curvefit all sensors + steps
 # =============================================================================
-def fitAll(data_dict,steps,time_bounds,sensors,functions,y0_bounds):
+def fitAll(data_dict,steps,time_bounds,sensors,functions,y0_bounds,alphas):
     '''
     fitAll: fit every step in an BLI experiment
     Input:
@@ -82,24 +82,25 @@ def fitAll(data_dict,steps,time_bounds,sensors,functions,y0_bounds):
         sensors: an array of sensors to fit
         functions: which functions correspond to which steps
         y0_bounds: an array of dimension (# sensors, # fits) for fit start location
+        alphas: matrix of alpha variables (# sensors, # fits) for baseline drift
     Output:
         parameters_dict: fit parameters (Y0, Plateau, K) and their standard deviations
     '''
     parameters_dict = dict(zip(sensors,[pd.DataFrame(index=steps,
-                      columns=['Y0','Plateau','K','Y0_std','Plateau_std','K_std']) for s in sensors]))
+                      columns=['Y0','Plateau','K','alpha','Y0_std','Plateau_std','K_std','alpha_std']) for s in sensors]))
     
     for i,step in enumerate(steps):
         for j,sensor in enumerate(sensors):
             func = functions[i]
             time_bound = time_bounds[i,j]
             y0_bound = y0_bounds[i,j]
+            alpha = alphas[i,j]
             if time_bound == 0:
                 time_bound=None
             if y0_bound == 0:
                 y0_bound=None
-            popt,perr = get_curve_fit(data_dict,step,sensor,func,time_bound,y0_bound)
+            popt,perr = get_curve_fit(data_dict,step,sensor,func,time_bound,y0_bound,alpha)
             parameters_dict[sensor].loc[step,:] = np.hstack((popt,perr))
-            
     return parameters_dict
 
 # =============================================================================
@@ -151,7 +152,7 @@ def plot_fit(data_dict,step,sensor,func,popt,time_bound=None,ax=None,**kwargs):
     t_0 = 0.0
     t_end = data_dict[step]['Time0'].values[-1]
     time = np.linspace(t_0,t_end,int(np.round(t_end*5)))
-    fit = func(time,popt[0],popt[1],popt[2])
+    fit = func(time,popt[0],popt[1],popt[2],popt[3])
     if ax is None:
         plt.plot(time,fit,label='fit',linewidth=5)
         plt.scatter(raw_data['Time0'],raw_data[sensor],s=1,**kwargs)
@@ -189,7 +190,7 @@ def plot_fit_all(data_dict,steps,time_bounds,sensors,functions,parameters_dict,p
             time_bound = time_bounds[i,j]
             if time_bound == 0:
                 time_bound=None
-            popt = parameters_dict[sensor].loc[step][:3].values
+            popt = parameters_dict[sensor].loc[step][:4].values
             ax = plot_fit(data_dict,step,sensor,func,popt,time_bound,ax)
             ax.get_xaxis().set_ticks([])
             ax.get_yaxis().set_ticks([])
@@ -199,7 +200,7 @@ def plot_fit_all(data_dict,steps,time_bounds,sensors,functions,parameters_dict,p
 # =============================================================================
 # define differential equation forms
 # =============================================================================
-def association(t, Y0, Plateau, K):
+def association(t, Y0, Plateau, K,alpha=0):
     '''
     association: general equation for single phase association
     Input:
@@ -207,12 +208,13 @@ def association(t, Y0, Plateau, K):
         Y0: starting value (normalized distance)
         Plateau: asymptote value (normalized distance)
         K: rate constant (1/M/sec)
+        alpha: unused parameter for association_linerror
     Output:
         Y0 + (Plateau-Y0)*(1-np.exp(-K*t)): one phase association equation
     '''
     return Y0 + (Plateau-Y0)*(1-np.exp(-K*t))
 
-def disassociation(t,Y0,Plateau,K):
+def disassociation(t,Y0,Plateau,K,alpha=0):
     '''
     disassociation: general equation for single phase disassociation
     Input:
@@ -220,15 +222,44 @@ def disassociation(t,Y0,Plateau,K):
         Y0: starting value (normalized distance)
         Plateau: asymptote value (normalized distance)
         K: rate constant (1/M/sec)
+        alpha: unused parameter for disassociation_linerror
     Output:
         (Y0 - Plateau)*np.exp(-K*t) + Plateau: one phase disassociation equation
     '''
     return (Y0 - Plateau)*np.exp(-K*t) + Plateau
 
+def association_linerror(t, Y0, Plateau, K, alpha):
+    '''
+    association: general equation for single phase association
+    Input:
+        t: time (seconds)
+        Y0: starting value (normalized distance)
+        Plateau: asymptote value (normalized distance)
+        K: rate constant (1/M/sec)
+        alpha: baseline drift coefficient
+    Output:
+        Y0 + (Plateau-Y0)*(1-np.exp(-K*t)) +alpha*t: one phase association equation with baseline drift
+    '''
+    return Y0 + (Plateau-Y0)*(1-np.exp(-K*t)) + alpha*t
+
+def disassociation_linerror(t,Y0,Plateau,K, alpha):
+    '''
+    disassociation: general equation for single phase disassociation
+    Input:
+        t: time (seconds)
+        Y0: starting value (normalized distance)
+        Plateau: asymptote value (normalized distance)
+        K: rate constant (1/M/sec)
+        alpha: baseline drift coefficient
+    Output:
+        (Y0 - Plateau)*np.exp(-K*t) + Plateau  + alpha*t : one phase disassociation equation with baseline drift 
+    '''
+    return (Y0 - Plateau)*np.exp(-K*t) + Plateau + alpha*t
+
 # =============================================================================
 # function to fit equations
 # =============================================================================
-def get_curve_fit(data_dict,step,sensor,func,time_bound=None,y0_bound=None,**kwargs):
+def get_curve_fit(data_dict,step,sensor,func,time_bound=None,y0_bound=None,alpha=None,**kwargs):
     '''
     get_curve_fit: get fit for a given BLI step
     Input:
@@ -238,6 +269,7 @@ def get_curve_fit(data_dict,step,sensor,func,time_bound=None,y0_bound=None,**kwa
         func: which function to use for fit
         time_bound: set an upper limit in case of baseline drift, defaults to None
         y0_bound: set the y value at time 0, defaults to None
+        alpha: coefficient of baseline drift
     Output:
         popt: fit parameters, outputs 0 if max function evaluations hits cap (default maxfev=800)
         perr: standard deviation fit parameters, outputs 0 if max function evaluations hits cap (default maxfev=800)
@@ -247,17 +279,35 @@ def get_curve_fit(data_dict,step,sensor,func,time_bound=None,y0_bound=None,**kwa
     else:
         fit_data = data_dict[step]
     try:
-        if y0_bound is None:
+        if y0_bound is None and alpha is None:
             popt, pcov = curve_fit(func, fit_data['Time0'], fit_data[sensor], **kwargs)
-        else:
-            popt, pcov = curve_fit(lambda t,Plateau,K: func(t,y0_bound,Plateau,K), fit_data['Time0'], fit_data[sensor], **kwargs)
-            popt = np.insert(popt,0,y0_bound)
-            pcov = np.array(((np.nan,np.nan,np.nan),(np.nan,pcov[0,0],pcov[0,1]),(np.nan,pcov[1,0],pcov[1,1])))
+        elif y0_bound is None and alpha is not None:
+            popt, pcov = curve_fit(lambda t,y0_bound,Plateau,K: func(t,y0_bound,Plateau,K,alpha), fit_data['Time0'], fit_data[sensor], **kwargs)
+            popt = np.array((popt[0],popt[1],popt[2],alpha))
+            pcov = np.array(((pcov[0,0],pcov[1,0],pcov[2,0],np.nan),
+                            (pcov[0,1],pcov[1,1],pcov[2,1],np.nan),
+                            (pcov[0,2],pcov[1,2],pcov[2,2],np.nan),
+                            (np.nan,np.nan,np.nan,np.nan)))
+        elif y0_bound is not None and alpha is None:
+            popt, pcov = curve_fit(lambda t,Plateau,K,alpha: func(t,y0_bound,Plateau,K,alpha), fit_data['Time0'], fit_data[sensor], **kwargs)
+            popt = np.array((y0_bound,popt[0],popt[1],popt[2]))
+            pcov = np.array(((np.nan,np.nan,np.nan,np.nan),
+                            (np.nan,pcov[0,0],pcov[1,0],pcov[2,0]),
+                            (np.nan,pcov[0,1],pcov[1,1],pcov[2,1]),
+                            (np.nan,pcov[0,2],pcov[1,2],pcov[2,2])))
+
+        else: #y_bound and alpha are both not None
+            popt, pcov = curve_fit(lambda t,Plateau,K: func(t,y0_bound,Plateau,K,alpha), fit_data['Time0'], fit_data[sensor], **kwargs)
+            popt = np.array((y0_bound,popt[0],popt[1],alpha))
+            pcov = np.array(((np.nan,np.nan,np.nan,np.nan),
+                            (np.nan,pcov[0,0],pcov[1,0],np.nan),
+                            (np.nan,pcov[0,1],pcov[1,1],np.nan),
+                            (np.nan,np.nan,np.nan,np.nan)))
         perr = np.sqrt(np.diag(pcov))
     except RuntimeError:
         print("Optimal parameters not found: Number of calls to function has reached maxfev = 800.")
-        popt = np.array([np.nan,np.nan,np.nan])
-        perr = np.array([np.nan,np.nan,np.nan])
+        popt = np.array([np.nan,np.nan,np.nan,np.nan])
+        perr = np.array([np.nan,np.nan,np.nan,np.nan])
     return popt, perr
 
 # =============================================================================
@@ -337,7 +387,7 @@ def plot_fit_parameters(parameters_dict,steps,sensors,time_bounds,functions,conc
             
                 ax = plot_fit_parameter(plot_data,sensors,ax,**kwargs)
         else:
-            #TODO: plot Y0 and plateau? not sure why'd you want to do that at this scale. maybe do later
+            #TODO: plot Y0 and plateau and alpha? not sure why'd you want to do that at this scale. maybe do later
             break
 
 def plot_fit_parameter(plot_data,sensors,ax=None,**kwargs):
