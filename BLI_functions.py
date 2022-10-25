@@ -15,7 +15,7 @@ from scipy.optimize import curve_fit
 # =============================================================================
 # preprocess
 # =============================================================================
-def preprocess(data,t_b,t_l,t_w,t_a,t_d):
+def preprocess(data,t_b,t_l,t_w,t_a,t_d) -> dict:
     '''
     preprocess: convert the raw data matrix from BLI into a dictionary of steps
     Input:
@@ -67,11 +67,25 @@ def preprocess(data,t_b,t_l,t_w,t_a,t_d):
                 data_dict[step][sensor_normalized_column_titles[i]] = data_dict[step].iloc[:,i+1]/data_dict[step].iloc[0,i+1]
     return data_dict
 
+def savePreprocessed(data_dict,root='outputData')->None:
+    '''
+    savePreprocessed: split raw_data into individual files for easier analysis
+    Inputs:
+        data_dict: from preprocess()
+        root: directory to save files
+    Outputs:
+        None    
+    '''
+    os.makedirs(root)
+        
+    for key in data_dict.keys():
+        output_data = data_dict[key]
+        output_data.to_excel(root + '/' + str(key) + '.xlsx')
 
 # =============================================================================
 # curvefit all sensors + steps
 # =============================================================================
-def fitAll(data_dict,steps,time_bounds,sensors,functions,y0_bounds,alphas):
+def fitAll(data_dict,steps,time_bounds,sensors,functions,y0_bounds,alphas) -> dict:
     '''
     fitAll: fit every step in an BLI experiment
     Input:
@@ -106,7 +120,7 @@ def fitAll(data_dict,steps,time_bounds,sensors,functions,y0_bounds,alphas):
 # =============================================================================
 # plot any step function
 # =============================================================================
-def plot_step(data_dict,step,sensors=None):
+def plot_step(data_dict,step,sensors=None) -> None:
     '''
     plot_step: plot raw data from a given BLI step
     Input:
